@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pagamentos</title>
+<meta name="theme-color" content="#14532d">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="supabase.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #1a1d21; --muted: #6b7280; --line: #e5e7eb;
+    --red: #dc2626; --red-bg: #fef2f2; --amber: #d97706; --amber-bg: #fffbeb;
+    --green: #16a34a; --green-bg: #f0fdf4; --brand: #14532d; --brand-text: #ffffff;
+    --chip: #eef0f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1114; --card: #1a1d22; --text: #e8eaed; --muted: #9aa0a8; --line: #2a2e35;
+      --red: #f87171; --red-bg: #2a1414; --amber: #fbbf24; --amber-bg: #2a2110;
+      --green: #4ade80; --green-bg: #102116; --brand: #166534; --chip: #252a31;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--brand); color: var(--brand-text);
+           padding: calc(10px + env(safe-area-inset-top)) 16px 10px; display: flex; align-items: center; gap: 8px; }
+  header h1 { font-size: 18px; margin: 0; flex: 1; }
+  main { max-width: 720px; margin: 0 auto; padding: 12px 16px 96px; }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; padding: 9px 14px; }
+  .btn { background: var(--brand); color: #fff; font-weight: 600; }
+  .btn-ghost { background: transparent; color: inherit; border: 1px solid var(--line); }
+  header .btn-ghost { border-color: rgba(255,255,255,.35); color: #fff; padding: 6px 10px; }
+  .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .stat { background: var(--card); border-radius: 12px; padding: 10px; border-top: 4px solid var(--muted); }
+  .stat b { display: block; font-size: 24px; line-height: 1.1; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .stat.red { border-color: var(--red); } .stat.red b { color: var(--red); }
+  .stat.amber { border-color: var(--amber); } .stat.amber b { color: var(--amber); }
+  .stat.green { border-color: var(--green); } .stat.green b { color: var(--green); }
+
+  .bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip { background: var(--chip); color: var(--text); padding: 6px 12px; border-radius: 999px; font-size: 14px; }
+  .chip.on { background: var(--text); color: var(--bg); }
+  .tabs { display: flex; background: var(--chip); border-radius: 10px; padding: 3px; margin-bottom: 12px; }
+  .tabs button { flex: 1; background: transparent; color: var(--muted); padding: 7px; }
+  .tabs button.on { background: var(--card); color: var(--text); font-weight: 600; }
+
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 16px 0 6px; }
+  .conta { background: var(--card); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px;
+           display: flex; gap: 10px; align-items: center; border-left: 5px solid var(--line); }
+  .conta.vencida { border-left-color: var(--red); background: var(--red-bg); }
+  .conta.breve { border-left-color: var(--amber); background: var(--amber-bg); }
+  .conta.paga { border-left-color: var(--green); }
+  .conta .info { flex: 1; min-width: 0; }
+  .conta .desc { font-weight: 600; overflow-wrap: anywhere; }
+  .conta .meta { font-size: 13px; color: var(--muted); }
+  .conta .status { font-size: 13px; font-weight: 600; }
+  .vencida .status { color: var(--red); } .breve .status { color: var(--amber); } .paga .status { color: var(--green); }
+  .conta .valor { font-weight: 700; white-space: nowrap; text-align: right; }
+  .conta .acoes { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .conta .acoes .btn { padding: 7px 12px; }
+  .tag { font-size: 11px; background: var(--chip); border-radius: 6px; padding: 1px 6px; margin-right: 4px; color: var(--text); }
+  .vazio { text-align: center; color: var(--muted); padding: 24px 0; }
+
+  .totais { background: var(--card); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; font-size: 14px; }
+  .totais div { display: flex; justify-content: space-between; padding: 2px 0; }
+  .totais div:last-child { font-weight: 700; border-top: 1px solid var(--line); margin-top: 4px; padding-top: 6px; }
+
+  .fab { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); border-radius: 999px;
+         padding: 14px 20px; box-shadow: 0 4px 14px rgba(0,0,0,.25); font-size: 16px; }
+
+  dialog { border: 0; border-radius: 16px; padding: 0; width: min(440px, calc(100vw - 32px));
+           background: var(--card); color: var(--text); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog form { padding: 16px; display: grid; gap: 10px; }
+  dialog h3 { margin: 0 0 4px; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  input, select, textarea { font: inherit; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line);
+                            background: var(--bg); color: var(--text); width: 100%; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .check { display: flex; gap: 8px; align-items: center; color: var(--text); font-size: 14px; }
+  .check input { width: auto; }
+  .dlg-acoes { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }
+  .dlg-acoes .esq { margin-right: auto; }
+
+  #login { max-width: 360px; margin: 12vh auto 0; background: var(--card); border-radius: 16px; padding: 20px; display: grid; gap: 10px; }
+  #login h2 { color: var(--text); font-size: 20px; text-transform: none; letter-spacing: 0; margin: 0; }
+  .msg { font-size: 13px; color: var(--red); min-height: 1em; }
+  .link { background: none; color: var(--muted); text-decoration: underline; padding: 4px; }
+  .hidden { display: none !important; }
+  #toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: var(--text); color: var(--bg);
+           padding: 8px 14px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Pagamentos</h1>
+  <button id="btnSair" class="btn-ghost hidden">Sair</button>
+</header>
+
+<div id="login" class="hidden">
+  <h2>Entrar</h2>
+  <label>Usuário <input id="usuario" autocomplete="username" autocapitalize="none"></label>
+  <label>Senha <input id="senha" type="password" autocomplete="current-password"></label>
+  <button id="btnEntrar" class="btn">Entrar</button>
+  <div id="loginMsg" class="msg"></div>
+</div>
+
+<main id="app" class="hidden">
+  <div class="stats">
+    <div class="stat red"><b id="sVencidas">0</b><span>vencidas</span></div>
+    <div class="stat amber"><b id="sSemana">0</b><span>vencem em 7 dias</span></div>
+    <div class="stat green"><b id="sPagas">0</b><span id="sPagasTxt">pagas no mês</span></div>
+  </div>
+
+  <div class="bar" id="filtroEmpresa">
+    <button class="chip on" data-e="">Todas</button>
+    <button class="chip" data-e="Spark">Spark</button>
+    <button class="chip" data-e="K&amp;C">K&amp;C</button>
+    <button class="chip" data-e="Pessoal">Pessoal</button>
+  </div>
+
+  <div class="tabs">
+    <button data-aba="apagar" class="on">A pagar</button>
+    <button data-aba="historico">Histórico</button>
+  </div>
+
+  <section id="abaApagar"></section>
+
+  <section id="abaHistorico" class="hidden">
+    <label>Mês <input id="mesHist" type="month"></label>
+    <div id="histConteudo" style="margin-top:10px"></div>
+  </section>
+</main>
+
+<button id="fab" class="btn fab hidden">+ Nova conta</button>
+
+<dialog id="dlgConta">
+  <form method="dialog" id="formConta">
+    <h3 id="dlgTitulo">Nova conta</h3>
+    <label>Descrição <input name="descricao" required placeholder="Ex.: DAS Simples Nacional"></label>
+    <div class="row">
+      <label>Empresa
+        <select name="empresa" required>
+          <option>Spark</option><option>K&amp;C</option><option>Pessoal</option>
+        </select>
+      </label>
+      <label>Categoria <input name="categoria" list="categorias" placeholder="Impostos"></label>
+    </div>
+    <div class="row">
+      <label>Valor (R$) <input name="valor" inputmode="decimal" placeholder="0,00"></label>
+      <label>Vencimento <input name="vencimento" type="date" required></label>
+    </div>
+    <label class="check"><input name="recorrente" type="checkbox"> Repete todo mês</label>
+    <label>Observação <textarea name="observacao" rows="2"></textarea></label>
+    <div class="dlg-acoes">
+      <button type="button" id="btnExcluir" class="btn-danger esq hidden">Excluir</button>
+      <button type="button" id="btnDesfazer" class="btn-ghost esq hidden">Desfazer pagamento</button>
+      <button type="button" class="btn-ghost" data-fechar>Cancelar</button>
+      <button type="submit" class="btn">Salvar</button>
+    </div>
+  </form>
+</dialog>
+<datalist id="categorias"></datalist>
+
+<dialog id="dlgPagar">
+  <form method="dialog" id="formPagar">
+    <h3>Marcar como paga</h3>
+    <div id="pagarDesc" style="font-weight:600"></div>
+    <div class="row">
+      <label>Data do pagamento <input name="data" type="date" required></label>
+      <label>Valor pago (R$) <input name="valor" inputmode="decimal"></label>
+    </div>
+    <div id="pagarRecorrente" class="meta" style="font-size:13px;color:var(--muted)"></div>
+    <div class="dlg-acoes">
+      <button type="button" class="btn-ghost" data-fechar>Cancelar</button>
+      <button type="submit" class="btn">Confirmar pagamento</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+// ---------------------------------------------------------------------
+// Configuração do projeto Supabase (URL e publishable key são públicas;
+// os dados ficam protegidos pelo login + RLS).
+// ---------------------------------------------------------------------
+const SUPABASE_URL = 'https://nvruebcrdprfwxkgodun.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_2YFIN7dI0tf1kyRW3Pv0gQ_iIxCHERp';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = (s) => document.querySelector(s);
+
+let contas = [];
+let filtroEmpresa = '';
+let editando = null;   // conta aberta no diálogo de edição
+let pagando = null;    // conta aberta no diálogo de pagamento
+
+// ---------- datas (sempre em Brasília) ----------
+const hojeISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+const diasEntre = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+const fmtData = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
+const fmtDataCurta = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+const brl = (v) => v == null ? '' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const lerValor = (s) => {
+  s = String(s || '').trim();
+  if (!s) return null;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  return isNaN(n) ? null : n;
+};
+const valorInput = (v) => v == null ? '' : Number(v).toFixed(2).replace('.', ',');
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ---------- login ----------
+async function iniciar() {
+  const { data: { session } } = await sb.auth.getSession();
+  mostrar(!!session);
+  if (session) carregar();
+}
+
+function mostrar(logado) {
+  $('#login').classList.toggle('hidden', logado);
+  $('#app').classList.toggle('hidden', !logado);
+  $('#fab').classList.toggle('hidden', !logado);
+  $('#btnSair').classList.toggle('hidden', !logado);
+}
+
+// O Supabase exige e-mail; o usuário "lucas" vira "lucas@painel-pagamentos.app".
+const emailDoUsuario = (u) => (u = u.trim().toLowerCase()).includes('@') ? u : u + '@painel-pagamentos.app';
+
+$('#btnEntrar').onclick = async () => {
+  $('#loginMsg').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email: emailDoUsuario($('#usuario').value), password: $('#senha').value });
+  if (error) { $('#loginMsg').textContent = 'Usuário ou senha incorretos.'; return; }
+  mostrar(true);
+  carregar();
+};
+$('#senha').onkeydown = (ev) => { if (ev.key === 'Enter') $('#btnEntrar').click(); };
+
+$('#btnSair').onclick = async () => { await sb.auth.signOut(); contas = []; mostrar(false); };
+
+// ---------- dados ----------
+async function carregar() {
+  const { data, error } = await sb.from('contas').select('*').order('vencimento');
+  if (error) { toast('Erro ao carregar: ' + error.message); return; }
+  contas = data;
+  render();
+}
+
+function situacao(c, hoje) {
+  if (c.pago_em) return { cls: 'paga', txt: 'Paga em ' + fmtData(c.pago_em) };
+  const d = diasEntre(hoje, c.vencimento);
+  if (d < 0) return { cls: 'vencida', txt: 'Vencida há ' + (-d) + (d === -1 ? ' dia' : ' dias') };
+  if (d === 0) return { cls: 'breve', txt: 'Vence HOJE' };
+  if (d <= 3) return { cls: 'breve', txt: 'Vence em ' + d + (d === 1 ? ' dia' : ' dias') + ' (' + fmtDataCurta(c.vencimento) + ')' };
+  return { cls: '', txt: 'Vence ' + fmtData(c.vencimento) };
+}
+
+function cartao(c, hoje) {
+  const s = situacao(c, hoje);
+  const valor = c.pago_em ? (c.valor_pago ?? c.valor) : c.valor;
+  return `<div class="conta ${s.cls}" data-id="${c.id}">
+    <div class="info">
+      <div class="desc">${esc(c.descricao)}</div>
+      <div class="meta"><span class="tag">${esc(c.empresa)}</span>${c.categoria ? esc(c.categoria) : ''}${c.recorrente ? ' · mensal' : ''}</div>
+      <div class="status">${s.txt}</div>
+    </div>
+    <div class="acoes">
+      <div class="valor">${brl(valor)}</div>
+      ${c.pago_em ? '' : `<button class="btn" data-pagar="${c.id}">Pago</button>`}
+    </div>
+  </div>`;
+}
+
+function render() {
+  const hoje = hojeISO();
+  const mes = hoje.slice(0, 7);
+  const lista = contas.filter((c) => !filtroEmpresa || c.empresa === filtroEmpresa);
+  const abertas = lista.filter((c) => !c.pago_em);
+
+  const vencidas = abertas.filter((c) => c.vencimento < hoje);
+  const semana = abertas.filter((c) => c.vencimento >= hoje && diasEntre(hoje, c.vencimento) <= 7);
+  const proximas = abertas.filter((c) => diasEntre(hoje, c.vencimento) > 7);
+  const pagasMes = lista.filter((c) => c.pago_em && c.pago_em.startsWith(mes));
+
+  $('#sVencidas').textContent = vencidas.length;
+  $('#sSemana').textContent = semana.length;
+  $('#sPagas').textContent = pagasMes.length;
+  $('#sPagasTxt').textContent = 'pagas no mês · ' + brl(pagasMes.reduce((t, c) => t + Number(c.valor_pago ?? c.valor ?? 0), 0));
+
+  const bloco = (titulo, itens) => itens.length
+    ? `<h2>${titulo} · ${brl(itens.reduce((t, c) => t + Number(c.valor ?? 0), 0))}</h2>` + itens.map((c) => cartao(c, hoje)).join('')
+    : '';
+  $('#abaApagar').innerHTML =
+    (bloco('Vencidas', vencidas) + bloco('Próximos 7 dias', semana) + bloco('Depois', proximas))
+    || '<div class="vazio">Nada a pagar. Tudo em dia ✅</div>';
+
+  renderHistorico();
+  $('#categorias').innerHTML = [...new Set(contas.map((c) => c.categoria).filter(Boolean))]
+    .sort().map((c) => `<option value="${esc(c)}">`).join('');
+}
+
+function renderHistorico() {
+  const mes = $('#mesHist').value || hojeISO().slice(0, 7);
+  const pagas = contas
+    .filter((c) => c.pago_em && c.pago_em.startsWith(mes) && (!filtroEmpresa || c.empresa === filtroEmpresa))
+    .sort((a, b) => b.pago_em.localeCompare(a.pago_em));
+  if (!pagas.length) { $('#histConteudo').innerHTML = '<div class="vazio">Nenhum pagamento neste mês.</div>'; return; }
+
+  const porEmpresa = {};
+  pagas.forEach((c) => { porEmpresa[c.empresa] = (porEmpresa[c.empresa] || 0) + Number(c.valor_pago ?? c.valor ?? 0); });
+  const total = Object.values(porEmpresa).reduce((a, b) => a + b, 0);
+  const hoje = hojeISO();
+  $('#histConteudo').innerHTML =
+    '<div class="totais">' +
+    Object.entries(porEmpresa).map(([e, v]) => `<div><span>${esc(e)}</span><span>${brl(v)}</span></div>`).join('') +
+    `<div><span>Total</span><span>${brl(total)}</span></div></div>` +
+    pagas.map((c) => cartao(c, hoje)).join('');
+}
+
+// ---------- interações ----------
+document.addEventListener('click', (ev) => {
+  const pagar = ev.target.closest('[data-pagar]');
+  if (pagar) { abrirPagar(contas.find((c) => c.id === pagar.dataset.pagar)); return; }
+  const card = ev.target.closest('.conta');
+  if (card) { abrirConta(contas.find((c) => c.id === card.dataset.id)); return; }
+  if (ev.target.matches('[data-fechar]')) ev.target.closest('dialog').close();
+});
+
+$('#filtroEmpresa').onclick = (ev) => {
+  const b = ev.target.closest('.chip');
+  if (!b) return;
+  filtroEmpresa = b.dataset.e;
+  document.querySelectorAll('#filtroEmpresa .chip').forEach((x) => x.classList.toggle('on', x === b));
+  render();
+};
+
+document.querySelectorAll('.tabs button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
+  $('#abaApagar').classList.toggle('hidden', b.dataset.aba !== 'apagar');
+  $('#abaHistorico').classList.toggle('hidden', b.dataset.aba !== 'historico');
+});
+$('#mesHist').value = hojeISO().slice(0, 7);
+$('#mesHist').onchange = renderHistorico;
+
+$('#fab').onclick = () => abrirConta(null);
+
+function abrirConta(c) {
+  editando = c;
+  const f = $('#formConta');
+  f.reset();
+  $('#dlgTitulo').textContent = c ? 'Editar conta' : 'Nova conta';
+  f.descricao.value = c?.descricao ?? '';
+  f.empresa.value = c?.empresa ?? (filtroEmpresa || 'Spark');
+  f.categoria.value = c?.categoria ?? '';
+  f.valor.value = valorInput(c?.valor);
+  f.vencimento.value = c?.vencimento ?? '';
+  f.recorrente.checked = c?.recorrente ?? false;
+  f.observacao.value = c?.observacao ?? '';
+  $('#btnExcluir').classList.toggle('hidden', !c);
+  $('#btnDesfazer').classList.toggle('hidden', !c?.pago_em);
+  $('#dlgConta').showModal();
+}
+
+$('#formConta').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const f = ev.target;
+  const dados = {
+    descricao: f.descricao.value.trim(),
+    empresa: f.empresa.value,
+    categoria: f.categoria.value.trim() || null,
+    valor: lerValor(f.valor.value),
+    vencimento: f.vencimento.value,
+    recorrente: f.recorrente.checked,
+    observacao: f.observacao.value.trim() || null,
+  };
+  const { error } = editando
+    ? await sb.from('contas').update(dados).eq('id', editando.id)
+    : await sb.from('contas').insert(dados);
+  if (error) { toast('Erro: ' + error.message); return; }
+  $('#dlgConta').close();
+  toast('Salvo');
+  carregar();
+};
+
+$('#btnExcluir').onclick = async () => {
+  if (!editando || !confirm('Excluir "' + editando.descricao + '"?')) return;
+  const { error } = await sb.from('contas').delete().eq('id', editando.id);
+  if (error) { toast('Erro: ' + error.message); return; }
+  $('#dlgConta').close();
+  toast('Excluída');
+  carregar();
+};
+
+$('#btnDesfazer').onclick = async () => {
+  if (!editando) return;
+  const { error } = await sb.from('contas').update({ pago_em: null, valor_pago: null }).eq('id', editando.id);
+  if (error) { toast('Erro: ' + error.message); return; }
+  $('#dlgConta').close();
+  toast('Pagamento desfeito');
+  carregar();
+};
+
+function abrirPagar(c) {
+  pagando = c;
+  const f = $('#formPagar');
+  $('#pagarDesc').textContent = c.descricao + ' · ' + c.empresa;
+  f.data.value = hojeISO();
+  f.valor.value = valorInput(c.valor);
+  $('#pagarRecorrente').textContent = c.recorrente ? 'A conta do mês seguinte será criada automaticamente.' : '';
+  $('#dlgPagar').showModal();
+}
+
+$('#formPagar').onsubmit = async (ev) => {
+  ev.preventDefault();
+  const f = ev.target;
+  const { error } = await sb.rpc('marcar_pago', { p_id: pagando.id, p_data: f.data.value, p_valor: lerValor(f.valor.value) });
+  if (error) { toast('Erro: ' + error.message); return; }
+  $('#dlgPagar').close();
+  toast('Pagamento registrado ✅');
+  carregar();
+};
+
+// Recarrega ao voltar para o app (ex.: depois de tocar na notificação)
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('#app').classList.contains('hidden')) carregar(); });
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+iniciar();
+</script>
+</body>
+</html>
