@@ -1,5 +1,5 @@
 // Cache do "casco" do app para abrir rápido; sempre tenta a rede primeiro.
-const CACHE = 'pagamentos-v1';
+const CACHE = 'pagamentos-v2';
 const ARQUIVOS = ['./', 'index.html', 'supabase.min.js', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -16,7 +16,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;  // Supabase sempre direto
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })  // sempre confere se há versão nova no GitHub
       .then((r) => { const copia = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copia)); return r; })
       .catch(() => caches.match(e.request))
   );
