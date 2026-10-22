@@ -231,9 +231,9 @@ grant  execute on function public.marcar_pago(uuid, date, numeric) to authentica
 
 -- ---------------------------------------------------------------------
 -- Agendamentos (cron em UTC; Brasília = UTC-3)
---   alertas: 9h, 13h, 17h e 20h · resumo: segunda 8h · keepalive: 11h30
+--   alertas: 7h, 11h, 15h e 20h · resumo: segunda 8h · keepalive: 11h30
 -- ---------------------------------------------------------------------
-select cron.schedule('alertas-pagamentos', '0 12,16,20,23 * * *', 'select public.enviar_alertas()');
+select cron.schedule('alertas-pagamentos', '0 10,14,18,23 * * *', 'select public.enviar_alertas()');
 select cron.schedule('resumo-semanal',     '0 11 * * 1',          'select public.resumo_semanal()');
 select cron.schedule('keepalive',          '30 14 * * *',         'select public.keepalive()');
 
